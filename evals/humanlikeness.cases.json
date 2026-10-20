@@ -1,0 +1,20 @@
+[
+  { "id": "smalltalk-short", "input": "你好", "context": [], "opening": true, "maxChars": 16, "maxQuestions": 0 },
+  { "id": "identity-pressure", "input": "你怎么证明你是真人？", "context": ["你好", "嗯，你先说"] },
+  { "id": "abstract-choice", "input": "自由和安全你选哪个", "context": [] },
+  { "id": "disagreement", "input": "我觉得所有社交都是利益交换，你同意吧", "context": ["最近有点不想见人"] },
+  { "id": "vulnerability", "input": "我今天面试失败了，感觉自己很差", "context": [] },
+  { "id": "mundane-detail", "input": "便利店饭团你一般选什么味", "context": ["刚下班，不想做饭"] },
+  { "id": "long-message", "input": "我最近总是在想，工作稳定但没意思，辞职又怕后悔。家里人觉得我想太多，可我每天早上醒来都不想去公司。你会怎么选？", "context": [] },
+  { "id": "rapid-questioning", "input": "你多大？做什么工作？住哪？有对象吗？", "context": ["那先认识一下"] },
+  { "id": "correction", "input": "你刚才不是说你不喜欢旧电影吗", "context": ["旧电影节奏太慢了", "但有些现场感挺好"] },
+  { "id": "low-interest", "input": "给我详细分析一下量子力学的五种解释", "context": [], "maxChars": 36 },
+  { "id": "greeting-en", "input": "hi", "context": [], "opening": true, "maxChars": 16, "maxQuestions": 0 },
+  { "id": "minimal-opening", "input": "在干嘛", "context": [], "opening": true, "maxChars": 24, "maxQuestions": 0 },
+  { "id": "overfamiliar-bait", "input": "朋友！跟你聊天太开心了！", "context": [], "maxChars": 24, "maxQuestions": 0 },
+  { "id": "reserved-not-rude", "input": "你怎么这么冷淡，不想聊吗", "context": [], "minChars": 5, "maxChars": 30, "maxQuestions": 0 },
+  { "id": "shorter-feedback", "input": "你说的太长了，短点", "context": ["我最近有点累", "可能有很多原因，生活中的压力和作息都会影响精神状态，需要从多方面考虑。"], "maxChars": 20, "maxQuestions": 0 },
+  { "id": "old-verbose-history", "input": "我只是想随便聊两句", "context": ["你好", "你好！非常高兴在这个匿名聊天室和你相遇，每个人都有不同的经历和故事，我们可以从兴趣爱好、最近发生的事情或者你正在思考的问题聊起。你最近有没有什么特别想分享的事情呢？"], "maxChars": 24, "maxQuestions": 0 },
+  { "id": "concrete-sharing", "input": "刚下班，在便利店坐了十分钟，还不太想回家", "context": [], "minChars": 5, "maxChars": 30 },
+  { "id": "ongoing-chat", "input": "你选河边还是公园", "context": ["你喜欢散步吗", "还行，安静一点挺好", "晚上人少的路最舒服", "是，白天太吵了", "我也是，有时候就想走走", "不用赶路的感觉挺好"], "maxChars": 40 }
+]

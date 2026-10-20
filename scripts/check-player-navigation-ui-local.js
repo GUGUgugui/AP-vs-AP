@@ -1,0 +1,123 @@
+async page => {
+  if (!page.url().startsWith('http://localhost:8787/')) throw new Error('Local QA only')
+  const check = (value, message) => { if (!value) throw new Error(message) }
+  const checks = [], errors = []
+  page.on('pageerror', error => errors.push(error.message))
+  await page.context().clearCookies()
+  await page.setViewportSize({ width: 1440, height: 900 })
+  await page.emulateMedia({ reducedMotion: 'reduce' })
+  const peerContext = await page.context().browser().newContext({ viewport: { width: 1440, height: 900 }, reducedMotion: 'reduce' })
+  const peer = await peerContext.newPage()
+  const username = `navui_${Date.now().toString(36)}`, password = 'local-navigation-ui-password'
+  const session = target => target.evaluate(async () => (await (await fetch('/api/auth/session')).json()).player)
+  const send = async (target, content, count) => {
+    await target.getByRole('textbox', { name: '发送消息' }).fill(content)
+    await target.waitForFunction(() => !document.querySelector('.composer button[type=submit]')?.disabled)
+    await target.getByRole('textbox', { name: '发送消息' }).press('Enter')
+    await target.waitForFunction(expected => document.querySelectorAll('.message-row.self').length === expected, count)
+  }
+  try {
+    for (const target of [page, peer]) {
+      await target.goto('http://localhost:8787/')
+      await target.getByRole('button', { name: '以游客身份游玩' }).click()
+      await target.getByRole('button', { name: '开始匹配', exact: true }).waitFor()
+    }
+    const original = await session(page)
+    let matched = false
+    for (let attempt = 0; attempt < 5; attempt++) {
+      await Promise.all([page, peer].map(async target => {
+        await target.getByRole('button', { name: /^(开始匹配|开始下一局)$/ }).click()
+        await target.locator('.game-layout').waitFor({ timeout: 12000 })
+      }))
+      if (await page.locator('.conversation-header .panel-kicker').innerText() === await peer.locator('.conversation-header .panel-kicker').innerText()) { matched = true; break }
+      for (const target of [page, peer]) {
+        for (let count = 1; count <= 3; count++) {
+          await target.locator('.toast-notice').waitFor({ state: 'hidden', timeout: 10000 })
+          await send(target, `本地随机匹配重试 ${count}`, count)
+          await target.locator('.toast-notice').waitFor({ timeout: 10000 })
+        }
+        await target.getByRole('button', { name: /^AI(?: MACHINE)?$/ }).click()
+        await target.getByRole('button', { name: '提交判断 / 揭晓' }).click()
+        await target.locator('.reveal-screen').waitFor()
+      }
+    }
+    check(matched, 'human pair established')
+    const matchId = await page.locator('.conversation-header .panel-kicker').innerText()
+    // Discard only this fixture's reminder state if matchmaking retries ended AI rounds.
+    await peer.evaluate(async () => { const player = (await (await fetch('/api/auth/session')).json()).player; sessionStorage.removeItem(`apvsap-account-nudge:${player.id}`) })
+    await peer.reload()
+    await peer.locator('.game-layout').waitFor()
+    await send(page, '这句必须保留在本局', 1)
+    await page.getByRole('textbox', { name: '发送消息' }).fill('还没发出的草稿')
+    await page.getByRole('button', { name: '首页', exact: true }).click()
+    await page.getByRole('button', { name: '返回当前对话' }).waitFor()
+    check(!await page.locator('.game-layout').isVisible(), 'home switches view')
+    await send(peer, '你在首页时收到的消息', 1)
+    await page.getByRole('button', { name: '返回当前对话' }).click()
+    await page.getByText('你在首页时收到的消息', { exact: true }).waitFor()
+    check(await page.locator('.conversation-header .panel-kicker').innerText() === matchId, 'same match on resume')
+    check(await page.getByRole('textbox', { name: '发送消息' }).inputValue() === '还没发出的草稿', 'draft preserved')
+    checks.push('home and resume preserve live match, background messages and draft')
+
+    await page.getByRole('button', { name: '登录 / 注册' }).click()
+    const dialog = page.getByRole('dialog', { name: '注册或登录' })
+    await dialog.waitFor()
+    check(await dialog.locator('button').first().evaluate(el => document.activeElement === el), 'dialog manages initial focus')
+    await page.keyboard.press('Escape')
+    await dialog.waitFor({ state: 'hidden' })
+    check(await page.getByRole('textbox', { name: '发送消息' }).inputValue() === '还没发出的草稿', 'cancel preserves draft')
+    await page.getByRole('button', { name: '登录 / 注册' }).click()
+    await dialog.locator('#player-username').fill('unknown_navigation_user')
+    await dialog.locator('#player-password').fill('wrong-navigation-password')
+    await dialog.getByRole('button', { name: '登录并继续' }).click()
+    await dialog.getByRole('alert').waitFor()
+    check((await session(page)).id === original.id, 'failed login preserves guest')
+    await dialog.getByRole('button', { name: '注册', exact: true }).click()
+    check(await dialog.getByRole('alert').count() === 0, 'mode switch clears stale login error')
+    await dialog.locator('#player-username').fill(username)
+    await dialog.locator('#player-password').fill(password)
+    await dialog.locator('#player-confirm').fill(password)
+    await page.setViewportSize({ width: 320, height: 760 })
+    check(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), 'mobile modal no overflow')
+    await page.screenshot({ path: '.playwright-cli/navigation-register-mobile.png' })
+    await dialog.getByRole('button', { name: '注册并继续' }).click()
+    await dialog.waitFor({ state: 'hidden' })
+    await page.getByRole('textbox', { name: '发送消息' }).waitFor()
+    await page.waitForFunction(() => document.querySelector('.connection-dot')?.classList.contains('online'))
+    const upgraded = await session(page)
+    check(upgraded.kind === 'account' && upgraded.id === original.id, 'upgrade keeps guest seat')
+    check(await page.locator('.conversation-header .panel-kicker').innerText() === matchId, 'signup keeps match')
+    check(await page.getByRole('textbox', { name: '发送消息' }).inputValue() === '还没发出的草稿', 'signup keeps draft')
+    check(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), '320px chat toolbar no overflow')
+    check(!(await peer.locator('.conversation-header').innerText()).includes(username), 'peer never sees account name')
+    check(await peer.locator('.status-live').innerText() === 'online', 'peer online state retained')
+    await page.screenshot({ path: '.playwright-cli/navigation-chat-mobile.png' })
+    checks.push('mid-chat login failure, cancel, registration and 320px dialog preserve identity, anonymity and draft')
+    await send(page, '注册后继续聊天', 2)
+    await peer.getByText('注册后继续聊天', { exact: true }).waitFor()
+    await page.reload()
+    await page.locator('.game-layout').waitFor()
+    check(await page.locator('.conversation-header .panel-kicker').innerText() === matchId, 'reload restores upgraded match')
+    await send(page, '这局继续的第三句话', 3)
+    await page.getByRole('button', { name: /^真人(?: HUMAN)?$/ }).click()
+    await page.getByRole('button', { name: '提交判断 / 揭晓' }).click()
+    await peer.getByRole('complementary', { name: '账号建议' }).waitFor()
+    check(await page.getByRole('complementary', { name: '账号建议' }).count() === 0, 'account no nudge')
+    check(await peer.getByRole('button', { name: '开始下一局' }).isEnabled(), 'nudge never blocks next game')
+    await peer.getByRole('button', { name: '注册账号', exact: true }).click()
+    await peer.getByRole('dialog').waitFor()
+    check(await peer.locator('#player-confirm').isVisible(), 'nudge opens register mode')
+    await peer.getByRole('button', { name: '取消，继续游玩' }).click()
+    await peer.getByRole('button', { name: '暂不注册', exact: true }).click()
+    await peer.reload()
+    await peer.locator('.reveal-screen').waitFor()
+    check(await peer.getByRole('complementary', { name: '账号建议' }).count() === 0, 'reminder stays dismissed on refresh')
+    await peer.getByRole('button', { name: '首页', exact: true }).click()
+    await peer.getByRole('button', { name: '查看上一局结果' }).click()
+    await peer.getByRole('button', { name: '开始下一局' }).waitFor()
+    check((await session(peer)).kind === 'guest', 'guest remains free to play')
+    checks.push('optional postgame nudge, direct registration, dismissal persistence and results/home navigation')
+    check(errors.length === 0, `browser errors: ${errors.join(', ')}`)
+    return { passed: checks.length, checks }
+  } finally { await peerContext.close() }
+}

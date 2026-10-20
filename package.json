@@ -1,0 +1,25 @@
+{
+  "name": "apvsap",
+  "version": "0.1.0",
+  "private": true,
+  "description": "人机迷雾 — 随机连接真人或AI的开放式身份判断游戏",
+  "scripts": {
+    "dev": "npm run build:client && wrangler dev",
+    "dev:client": "cd client && npm run dev",
+    "dev:worker": "wrangler dev --port 8787",
+    "build": "npm run build:client && npm run build:worker",
+    "build:client": "cd client && npm run build",
+    "build:server": "cd server && npm run build",
+    "build:worker": "tsc -p cloudflare/tsconfig.json && wrangler deploy --dry-run --outdir .wrangler/dry-run",
+    "start": "wrangler dev",
+    "deploy": "npm run build:client && wrangler deploy",
+    "test": "npm test --prefix server && node --test tests/*.test.mjs",
+    "eval:human": "node scripts/run-humanlikeness-eval.mjs"
+  },
+  "devDependencies": {
+    "@cloudflare/workers-types": "^5.20260801.1",
+    "axe-core": "^4.14.0",
+    "typescript": "^5.9.3",
+    "wrangler": "^4.118.0"
+  }
+}

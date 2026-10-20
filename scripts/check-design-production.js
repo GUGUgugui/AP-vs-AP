@@ -1,0 +1,52 @@
+async page => {
+  const base = 'https://apvsap.jiawwo11.workers.dev'
+  if (!page.url().startsWith(base + '/')) throw new Error('This project production site only')
+  const check = (value, message) => { if (!value) throw new Error(message) }, checks = [], errors = []
+  page.on('pageerror', error => errors.push(error.message))
+  await page.context().clearCookies()
+  await page.emulateMedia({ reducedMotion: 'reduce' })
+  const response = await page.goto(base + '/')
+  await page.getByRole('heading', { name: /隔着屏幕，\s*谁在回答？/ }).waitFor()
+  check(Boolean(response.headers()['content-security-policy']), 'production CSP retained')
+  const assets = await page.evaluate(() => ({ js: document.querySelector('script[type=module]').getAttribute('src'), css: document.querySelector('link[rel=stylesheet]').getAttribute('href') }))
+  for (const size of [{ width: 1440, height: 900 }, { width: 390, height: 844 }, { width: 320, height: 568 }]) {
+    await page.setViewportSize(size)
+    await page.evaluate(() => document.fonts.ready)
+    check(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), `production ${size.width}: overflow`)
+    const box = await page.getByRole('button', { name: '以游客身份游玩' }).boundingBox()
+    check(box.y + box.height <= size.height, `production ${size.width}: guest action below fold`)
+    if (size.width !== 320) await page.screenshot({ path: `.playwright-cli/design-production-entry-${size.width}.png`, fullPage: true })
+  }
+  checks.push('deployed brand assets, CSP and desktop/mobile first-fold guest entry')
+  const boundaries = await page.evaluate(async () => {
+    const health = await (await fetch('/api/health')).json()
+    return { healthy: health.status === 'ok', privateProfile: (await fetch('/api/player/profile')).status, trainingExport: (await fetch('/admin/api/training/export')).status }
+  })
+  check(boundaries.healthy && boundaries.privateProfile === 401 && boundaries.trainingExport === 401, 'production health and unauthenticated boundaries')
+  checks.push('health and protected player/admin endpoints')
+  await page.getByRole('button', { name: '以游客身份游玩' }).click()
+  await page.getByRole('button', { name: '开始匹配', exact: true }).waitFor()
+  check(await page.evaluate(() => !document.cookie.includes('apvsap_player')), 'player session remains HttpOnly')
+  await page.getByRole('button', { name: '我的', exact: true }).click()
+  await page.locator('.badge-grid').waitFor()
+  check(await page.locator('.badge-grid article').count() === 4 && await page.locator('.badge-grid .unlocked').count() === 0, 'no fabricated badges')
+  check(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), 'production 320px notebook overflow')
+  await page.getByRole('button', { name: '登录 / 注册' }).click()
+  await page.getByRole('dialog').getByRole('button', { name: '注册', exact: true }).click()
+  await page.locator('#player-confirm').waitFor()
+  await page.keyboard.press('Escape')
+  await page.getByRole('dialog').waitFor({ state: 'hidden' })
+  await page.getByRole('button', { name: '首页', exact: true }).click()
+  await page.getByRole('button', { name: '开始匹配', exact: true }).waitFor()
+  await page.getByRole('button', { name: '退出', exact: true }).click()
+  await page.getByRole('button', { name: '以游客身份游玩' }).waitFor()
+  checks.push('guest, private notebook, cancelable registration, navigation and logout; no actual matchmaking or paid model call')
+  await page.goto(base + '/admin')
+  await page.locator('#admin-password').waitFor()
+  await page.getByRole('button', { name: '进入', exact: true }).waitFor()
+  check(await page.locator('.admin-login-brand').innerText() === 'AP/AP', 'deployed administrator entry shares brand')
+  await page.screenshot({ path: '.playwright-cli/design-production-admin-login-320.png' })
+  check(errors.length === 0, 'production runtime errors: ' + errors.join(', '))
+  checks.push('administrator entry, no credential submission, no runtime errors')
+  return { passed: checks.length, checks, assets }
+}

@@ -1,0 +1,48 @@
+{
+  "$schema": "./node_modules/wrangler/config-schema.json",
+  "name": "apvsap",
+  "main": "cloudflare/worker.ts",
+  "compatibility_date": "2026-08-03",
+  "assets": {
+    "directory": "./client/dist",
+    "binding": "ASSETS",
+    "not_found_handling": "single-page-application",
+    "run_worker_first": true
+  },
+  "durable_objects": {
+    "bindings": [
+      {
+        "name": "LOBBY",
+        "class_name": "MistLobby"
+      }
+    ]
+  },
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "apvsap-production",
+      "database_id": "f51a1b12-4b4b-430b-8f55-1a5f61921cee",
+      "migrations_dir": "migrations"
+    }
+  ],
+  "migrations": [
+    {
+      "tag": "v1",
+      "new_sqlite_classes": ["MistLobby"]
+    }
+  ],
+  "vars": {
+    "DEEPSEEK_MODEL": "deepseek-v4-flash",
+    "RETENTION_DAYS": "30",
+    "PROMPT_VERSION": "human-v5-reserved"
+  },
+  "triggers": {
+    "crons": ["17 3 * * *"]
+  },
+  "secrets": {
+    "required": ["DEEPSEEK_API_KEY", "ADMIN_PASSWORD", "ADMIN_SESSION_SECRET", "PLAYER_AUTH_SECRET"]
+  },
+  "observability": {
+    "enabled": true
+  }
+}
